@@ -33,7 +33,7 @@ CONTACT_PROPERTIES = [
 ]
 
 SOURCE_MAP = {
-    "demo request": "demo_request", "request demo": "demo_request", "book a demo": "demo_request",
+    "demo": "demo_request",
     "contact sales": "contact_sales", "talk to sales": "contact_sales",
     "pricing": "pricing_page", "free trial": "free_trial", "trial signup": "free_trial",
     "webinar": "webinar", "ebook": "content_download", "whitepaper": "content_download", "guide": "content_download",

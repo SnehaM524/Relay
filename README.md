@@ -12,6 +12,14 @@ HubSpot MQL ──webhook──▶ Relay ──▶ enrich (Clay ∥ Harmonic) �
               SLA clock ──▶ escalate on breach ──▶ auto-reassign ◀─────────────┘
 ```
 
+## What the SDR sees
+
+<img src="docs/slack-handoff.png" width="760" alt="Slack handoff card: tier, score, owner, SLA, enrichment summary, routing reason, and Accept / Mark contacted / Reassign buttons">
+
+## What the numbers look like
+
+<img src="docs/simulate-stats.png" width="760" alt="relay simulate output: median 3.2 min response time across 50 synthetic leads, 33 tests passing">
+
 ## Why
 
 Lead response time is the single biggest controllable driver of MQL→SQL conversion, and the usual stack (HubSpot workflows → Salesforce assignment rules → someone notices a Chatter post) takes 20–60 minutes with no accountability. Relay makes the full path — enrich, score, route, notify, start a timer — take seconds, and makes the SLA visible to everyone.

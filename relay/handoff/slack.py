@@ -34,7 +34,8 @@ def build_handoff_blocks(rec: LeadRecord, sla_minutes: int) -> list[dict[str, An
             e.funding_stage if e else None,
         ] if p
     )
-    signals = [b.reason for b in s.breakdown[:4]]
+    top = sorted(s.breakdown, key=lambda b: -b.points)[:4]
+    signals = [f"{b.rule.replace('_', ' ').capitalize()} +{b.points:g}" for b in top]
     sf_link = f"<https://your-instance.lightning.force.com/{rec.salesforce_lead_id}|Open in Salesforce>" if rec.salesforce_lead_id else "_Salesforce sync pending_"
     return [
         {"type": "header", "text": {"type": "plain_text", "text": f"New {s.tier.value}-tier lead: {lead.full_name}"}},
