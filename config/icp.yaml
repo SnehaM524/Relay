@@ -1,0 +1,116 @@
+# ICP scoring model.
+# Each rule adds (or subtracts) points. Tier thresholds decide the outcome.
+# Disqualifiers short-circuit to tier D regardless of score.
+
+tiers:
+  A: 70   # >= 70  -> hot, 5 min SLA
+  B: 45   # >= 45  -> fit, 15 min SLA
+  C: 20   # >= 20  -> nurture, 60 min SLA
+  # anything below C threshold -> D (disqualify / recycle to marketing)
+
+disqualifiers:
+  free_email: true                       # gmail, yahoo, etc.
+  blocked_domains: [competitor.com, example.com, test.com]
+  blocked_countries: [KP, IR, SY, CU]
+  min_employee_count: 5
+  title_keywords: [student, intern, unemployed, retired]
+
+rules:
+  # --- Firmographics ---
+  - name: employee_count
+    field: enrichment.employee_count
+    buckets:
+      - { min: 500,  points: 25 }
+      - { min: 200,  points: 20 }
+      - { min: 50,   points: 15 }
+      - { min: 20,   points: 8 }
+      - { min: 5,    points: 2 }
+
+  - name: industry
+    field: enrichment.industry
+    match:
+      "Software": 15
+      "SaaS": 15
+      "Fintech": 15
+      "Information Technology": 12
+      "Financial Services": 10
+      "Healthcare": 8
+      "E-commerce": 8
+      "Marketing": 6
+    default: 0
+
+  - name: funding_stage
+    field: enrichment.funding_stage
+    match:
+      "Series C": 15
+      "Series D": 15
+      "Series E": 15
+      "Series B": 14
+      "Series A": 10
+      "Seed": 5
+      "Public": 12
+      "Private Equity": 10
+    default: 0
+
+  - name: headcount_growth
+    field: enrichment.headcount_growth_6mo_pct
+    buckets:
+      - { min: 30, points: 12 }
+      - { min: 15, points: 8 }
+      - { min: 5,  points: 4 }
+      - { min: -5, points: 0 }
+      - { min: -100, points: -5 }
+
+  # --- Persona ---
+  - name: seniority
+    field: enrichment.seniority
+    match:
+      "C-Level": 15
+      "VP": 14
+      "Director": 12
+      "Head": 12
+      "Manager": 7
+      "Senior IC": 4
+      "IC": 2
+    default: 0
+
+  - name: department
+    field: enrichment.department
+    match:
+      "Sales": 8
+      "Revenue Operations": 10
+      "Marketing": 6
+      "Operations": 4
+      "Engineering": 2
+    default: 0
+
+  # --- Tech stack signals (any overlap) ---
+  - name: tech_stack
+    field: enrichment.tech_stack
+    any_of:
+      "Salesforce": 8
+      "HubSpot": 8
+      "Outreach": 5
+      "Salesloft": 5
+      "Gong": 4
+      "Snowflake": 3
+    cap: 15
+
+  # --- Behavioral / intent (from HubSpot) ---
+  - name: hubspot_lead_score
+    field: lead.hubspot_properties.hs_lead_score
+    buckets:
+      - { min: 80, points: 10 }
+      - { min: 50, points: 6 }
+      - { min: 20, points: 2 }
+
+  - name: high_intent_source
+    field: lead.source
+    match:
+      "demo_request": 20
+      "pricing_page": 15
+      "contact_sales": 20
+      "free_trial": 10
+      "webinar": 4
+      "content_download": 2
+    default: 0

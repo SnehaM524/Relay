@@ -1,0 +1,50 @@
+# Routing rules, evaluated top to bottom. First match wins.
+# Each rule picks a team; the strategy then picks an SDR inside that team.
+#
+# Strategies:
+#   round_robin        - weighted round robin among active, under-capacity SDRs
+#   least_loaded       - SDR with fewest open leads
+#   territory          - match lead country to SDR territories, then round robin
+#   named              - a fixed SDR id (e.g., for a strategic account owner)
+#
+# Match keys (all optional, ANDed): tier, segment, countries, domains, source, min_employees
+
+teams:
+  enterprise:
+    strategy: least_loaded
+    fallback_team: midmarket
+  midmarket:
+    strategy: territory
+    fallback_team: smb
+  smb:
+    strategy: round_robin
+    fallback_team: null
+
+rules:
+  - name: strategic_accounts
+    match: { domains: [acme.com, globex.com] }
+    team: enterprise
+    strategy: named
+    sdr: sdr-ent-1
+
+  - name: tier_a_enterprise
+    match: { tier: [A], min_employees: 500 }
+    team: enterprise
+
+  - name: tier_a_midmarket
+    match: { tier: [A] }
+    team: midmarket
+
+  - name: tier_b_midmarket
+    match: { tier: [B], min_employees: 50 }
+    team: midmarket
+
+  - name: tier_b_c_smb
+    match: { tier: [B, C] }
+    team: smb
+
+# Segment helper: used for SDR.segments matching and Slack labels
+segments:
+  enterprise: { min_employees: 500 }
+  midmarket:  { min_employees: 50 }
+  smb:        { min_employees: 0 }

@@ -1,0 +1,86 @@
+# SDR roster. In production you can also load this from Salesforce (User + custom
+# Territory fields) by setting RELAY_SDR_SOURCE=salesforce; the YAML is the default.
+
+sdrs:
+  - id: sdr-ent-1
+    name: Priya Natarajan
+    email: priya@yourco.com
+    slack_user_id: U01ENT001
+    salesforce_user_id: 005ENT00000001
+    team: enterprise
+    territories: [US, CA]
+    segments: [enterprise]
+    capacity: 25
+
+  - id: sdr-ent-2
+    name: Marcus Lee
+    email: marcus@yourco.com
+    slack_user_id: U01ENT002
+    salesforce_user_id: 005ENT00000002
+    team: enterprise
+    territories: [GB, DE, FR, NL]
+    segments: [enterprise]
+    capacity: 25
+
+  - id: sdr-mm-1
+    name: Dana Okafor
+    email: dana@yourco.com
+    slack_user_id: U01MM0001
+    salesforce_user_id: 005MM000000001
+    team: midmarket
+    territories: [US]
+    segments: [midmarket]
+    capacity: 40
+
+  - id: sdr-mm-2
+    name: Tomás Herrera
+    email: tomas@yourco.com
+    slack_user_id: U01MM0002
+    salesforce_user_id: 005MM000000002
+    team: midmarket
+    territories: [US, MX, BR]
+    segments: [midmarket]
+    capacity: 40
+
+  - id: sdr-mm-3
+    name: Aisha Khan
+    email: aisha@yourco.com
+    slack_user_id: U01MM0003
+    salesforce_user_id: 005MM000000003
+    team: midmarket
+    territories: [GB, IE, DE, FR, NL, SE]
+    segments: [midmarket]
+    capacity: 40
+
+  - id: sdr-smb-1
+    name: Jordan Blake
+    email: jordan@yourco.com
+    slack_user_id: U01SMB001
+    salesforce_user_id: 005SMB00000001
+    team: smb
+    territories: []
+    segments: [smb]
+    capacity: 60
+    weight: 1.0
+
+  - id: sdr-smb-2
+    name: Mei Chen
+    email: mei@yourco.com
+    slack_user_id: U01SMB002
+    salesforce_user_id: 005SMB00000002
+    team: smb
+    territories: []
+    segments: [smb]
+    capacity: 60
+    weight: 1.0
+
+  - id: sdr-smb-3
+    name: Sam Patel
+    email: sam@yourco.com
+    slack_user_id: U01SMB003
+    salesforce_user_id: 005SMB00000003
+    team: smb
+    territories: []
+    segments: [smb]
+    capacity: 60
+    weight: 0.5   # ramping
