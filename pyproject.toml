@@ -3,29 +3,30 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "autopilot-growth"
+name = "relay-routing"
 version = "0.1.0"
-description = "Autopilot: AI growth experimentation agent — funnel analysis, experiment proposals, React variants, flag config, and readouts"
+description = "Relay: lead routing and handoff engine between HubSpot and Salesforce"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
-    "anthropic>=0.40",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
     "httpx>=0.27",
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
     "pyyaml>=6.0",
-    "scipy>=1.11",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
 
 [project.scripts]
-autopilot = "autopilot.cli:main"
+relay = "relay.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["autopilot*"]
+include = ["relay*"]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 testpaths = ["tests"]

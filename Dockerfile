@@ -1,9 +1,9 @@
 FROM python:3.12-slim
 WORKDIR /app
 COPY pyproject.toml README.md ./
-COPY autopilot ./autopilot
+COPY relay ./relay
 COPY config ./config
-COPY data ./data
 RUN pip install --no-cache-dir .
-ENTRYPOINT ["autopilot"]
-CMD ["simulate"]
+ENV RELAY_CONFIG_DIR=/app/config
+EXPOSE 8080
+CMD ["relay", "serve", "--host", "0.0.0.0", "--port", "8080"]
