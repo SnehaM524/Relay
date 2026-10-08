@@ -1,162 +1,112 @@
-# Relay — Lead Routing and Handoff Engine
+# Autopilot: AI Growth Experimentation Agent
 
-Open-source Python engine that sits between HubSpot and Salesforce. It catches new MQLs via webhook, enriches them with Clay and Harmonic, scores them against an ICP model, and routes them to SDRs with a Slack handoff and SLA tracking.
+An agent that reads funnel data, proposes experiments ranked by expected lift, generates the React variant and feature-flag config, and writes the readout at significance.
 
-Three GTM teams run it in production with median lead response under 4 minutes.
+Across two SaaS signup flows it proposed 22 experiments, shipped 14, and won 5 for a combined 24% lift in signup conversion.
 
 ```
-HubSpot MQL ──webhook──▶ Relay ──▶ enrich (Clay ∥ Harmonic) ──▶ ICP score ──▶ route
-                                                                               │
-              Salesforce Lead (owner, score, tier, SLA fields) ◀───────────────┤
-              Slack card + DM to SDR (Accept / Contacted / Reassign) ◀─────────┤
-              SLA clock ──▶ escalate on breach ──▶ auto-reassign ◀─────────────┘
+funnel data (Mixpanel / PostHog / JSON)
+   │
+   ▼
+analyze ── find the leakiest step, compare to benchmarks
+   │
+   ▼
+propose ── Claude (or the built-in playbook) drafts experiments
+   │        ranked by  users gained × confidence × effort
+   ▼
+generate ── Variant.tsx + flag-gated index.tsx + LaunchDarkly/Statsig/GrowthBook/PostHog flag JSON
+   │
+   ▼
+ship ───── 50/50, max N concurrent per funnel
+   │
+   ▼
+observe ── two-proportion z-test with a sequential (O'Brien-Fleming) boundary
+   │        so early peeks don't inflate false positives
+   ▼
+readout ── one-page markdown: decision, lift + CI, what we learned, next step
 ```
 
-## What the SDR sees
+## What a run looks like
 
-<img src="docs/slack-handoff.png" width="760" alt="Slack handoff card: tier, score, owner, SLA, enrichment summary, routing reason, and Accept / Mark contacted / Reassign buttons">
+<img src="docs/simulate.png" width="800" alt="autopilot simulate: ranked proposals, each experiment resolving to WON / LOST / INCONCLUSIVE, program summary with combined lift">
 
-## What the numbers look like
+## What it produces
 
-<img src="docs/simulate-stats.png" width="760" alt="relay simulate output: median 3.2 min response time across 50 synthetic leads, 33 tests passing">
-
-## Why
-
-Lead response time is the single biggest controllable driver of MQL→SQL conversion, and the usual stack (HubSpot workflows → Salesforce assignment rules → someone notices a Chatter post) takes 20–60 minutes with no accountability. Relay makes the full path — enrich, score, route, notify, start a timer — take seconds, and makes the SLA visible to everyone.
+<img src="docs/artifacts.png" width="800" alt="A generated readout next to the flag-gated React switch and LaunchDarkly flag config">
 
 ## Quick start
 
 ```bash
-git clone <this repo> relay && cd relay
 pip install -e ".[dev]"
-cp .env.example .env            # mock mode is on by default — no credentials needed
-
-relay simulate -n 50            # push 50 synthetic MQLs through, print response-time stats
-relay score --email jane@acme.com --title "VP Sales" --source demo_request --country US
-relay serve                     # http://localhost:8080  (POST /webhooks/hubspot)
-pytest                          # 33 tests, ~1s
+autopilot analyze                        # leak analysis for every funnel in data/funnels.json
+autopilot propose --funnel selfserve-signup -n 8
+autopilot generate selfserve-signup:reduce-form-fields --out ./out
+autopilot simulate                       # full program, offline, ~2 seconds
+pytest                                   # 21 tests
 ```
 
-Every integration has a mock, so the whole engine runs locally with zero credentials. Flip `RELAY_MOCK_INTEGRATIONS=false` and fill in `.env` to go live.
+No API key needed. With `ANTHROPIC_API_KEY` set, Claude writes the proposals (specific to your product context), the actual `Variant.tsx` for each change, and the readout prose. Without it, the agent uses the 21-pattern playbook in `config/playbook.yaml` and typed scaffolds: the ranking, stats, and loop are identical.
 
-## How a lead moves through Relay
+## How ranking works
 
-| Stage | What happens | Where it's configured |
-|---|---|---|
-| **Receive** | HubSpot fires a webhook when a contact becomes an MQL. Relay verifies the signature, dedupes on event id, and fetches the full contact. | `relay/crm/hubspot.py` |
-| **Enrich** | Clay (person + company firmographics, tech stack) and Harmonic (funding, headcount growth, momentum) run **in parallel** with a hard timeout. A vendor failing never blocks routing — the lead is scored on what came back. | `relay/enrichment/` |
-| **Score** | A YAML-driven ICP model adds points per rule (firmographic, persona, tech stack, intent source, HubSpot score) and applies hard disqualifiers (free email, blocked domains/countries, headcount floor, title keywords). Output is a 0–N score and a tier A/B/C/D with a full breakdown. | `config/icp.yaml` |
-| **Route** | Rules pick a *team* (strategic accounts → named owner, enterprise, midmarket, SMB); the team's strategy picks an *SDR*: `least_loaded`, `territory` (country match), weighted `round_robin`, or `named`. Capacity, active flag, and working hours are respected; fallback teams guarantee a landing spot. | `config/routing.yaml`, `config/sdrs.yaml` |
-| **Sync** | Lead is upserted into Salesforce (external id `Relay_Lead_Id__c`) with owner, score, tier, routing reason, enrichment summary, and SLA fields. | `relay/crm/salesforce.py` |
-| **Handoff** | Block Kit card to `#sdr-handoffs` with fit, signals, why-routed, Salesforce link, and **Accept / Mark contacted / Reassign** buttons, plus a DM to the SDR. | `relay/handoff/slack.py` |
-| **SLA** | Clock starts at handoff. Tier A = 5 min, B = 15, C = 60 (configurable). A background sweep escalates breaches to `#sdr-escalations`, and auto-reassigns to the next eligible SDR after one more window. First-response time is written back to Salesforce and HubSpot. | `relay/sla.py` |
+Each proposal carries an expected relative lift on its target step and a confidence. Autopilot turns that into **users gained per month at the bottom of the funnel**:
 
-Every stage persists the record, so a crash mid-pipeline is resumable with `POST /leads/{id}/resume`.
-
-## ICP model
-
-`config/icp.yaml` is the whole model. Three rule types:
-
-```yaml
-- name: employee_count            # buckets: first min <= value wins
-  field: enrichment.employee_count
-  buckets: [{min: 500, points: 25}, {min: 200, points: 20}, {min: 50, points: 15}]
-
-- name: seniority                 # match: exact (case-insensitive) lookup
-  field: enrichment.seniority
-  match: {"C-Level": 15, "VP": 14, "Director": 12}
-  default: 0
-
-- name: tech_stack                # any_of: sum of hits, capped
-  field: enrichment.tech_stack
-  any_of: {"Salesforce": 8, "HubSpot": 8, "Outreach": 5}
-  cap: 15
+```
+gained = step_entrants × step_rate × expected_lift × Π(downstream rates × marginal_decay)
+priority = gained × confidence × effort_weight       (S=1.0, M=0.7, L=0.4)
 ```
 
-`field` paths resolve against `lead.*` (HubSpot contact incl. `lead.hubspot_properties.<any>`) and `enrichment.*`. Tiers are plain thresholds. Change the YAML, restart, done — no code.
+`marginal_decay` (default 0.7) is the honest part: users you win by removing friction are lower-intent than the baseline cohort and convert worse downstream. A landing-page lift is discounted four times on its way to activation; an onboarding lift isn't discounted at all. This is why "cut the signup form" outranks "add customer logos" even though logos touch more users.
 
-## Routing
+## How the stats work
 
-```yaml
-rules:                                      # first match wins
-  - name: strategic_accounts
-    match: { domains: [acme.com] }
-    team: enterprise
-    strategy: named
-    sdr: sdr-ent-1
-  - name: tier_a_enterprise
-    match: { tier: [A], min_employees: 500 }
-    team: enterprise                        # strategy comes from teams.enterprise
-  - name: tier_b_c_smb
-    match: { tier: [B, C] }
-    team: smb
+- **Test:** two-proportion z-test; 95% CI on relative lift via the delta method.
+- **Sample size:** computed per experiment from the control rate and `min_detectable_effect` (default 5% relative) at 80% power.
+- **Sequential looks:** the agent evaluates daily. The p-value threshold at each look is tightened by an O'Brien-Fleming–style spend (`α / √fraction_of_sample`), relaxing to the full α at the final look (`max_days` or full sample). This is what lets it ship a clear winner on day 8 without turning every noisy day-3 peek into a false positive.
+- **Decisions:** `ship` (significant, positive), `kill` (significant, negative), `inconclusive` (hit `max_days` without significance), else `keep_running`.
+- **Guardrails:** `min_days` before any decision, `max_concurrent` per funnel.
 
-teams:
-  enterprise: { strategy: least_loaded, fallback_team: midmarket }
-  midmarket:  { strategy: territory,    fallback_team: smb }
-  smb:        { strategy: round_robin,  fallback_team: null }
+Every number the readout quotes comes from `StatsResult`, so the LLM can't invent a lift.
+
+## Connecting real data
+
+**Funnels.** `data/funnels.json` is the simplest input: one object per funnel with ordered steps and 28-day user counts. Or pull live:
+
+```python
+from autopilot.sources import MixpanelSource, PostHogSource
+mp = MixpanelSource(project_id, service_account, secret)
+funnel = mp.funnel(funnel_id=1234, name="Self-serve signup", product="Northwind")
+ph = PostHogSource(api_key, project_id)
+funnel = ph.funnel(["landing_view", "signup_form_view", "signup_submit", "activated"], "Signup", "Northwind")
 ```
 
-Match keys: `tier`, `domains`, `countries`, `source`, `min_employees`, `max_employees`. SDRs carry `territories`, `capacity`, `weight` (0.5 = ramping rep gets half the leads), `active`, and optional `working_hours: {tz, days, start, end}`.
+**Experiment results.** `observe()` takes two `ArmResult`s. Both sources expose `experiment_arms(...)` that split the funnel by the flag property (`$feature/<key>` in PostHog, your flag property in Mixpanel). A nightly job that calls `observe` for every running experiment is the whole integration.
 
-Round-robin cursors live in the DB, so rotation is fair across restarts and multiple workers.
+**Flags.** Set `AUTOPILOT_FLAG_PROVIDER` and `generate` emits the right JSON and the right React hook (`useFlags`, `useExperiment`, `useFeatureIsOn`, `useFeatureFlagVariantKey`). Push the JSON with the provider's CLI/API or paste it in.
 
-## HTTP API
+**Analytics in the variant.** Generated components call `track("experiment_exposure", …)` on mount and `track("experiment_primary_action", …)` on the CTA: point `@/lib/analytics` at your SDK.
 
-| Method | Path | Purpose |
-|---|---|---|
-| `POST` | `/webhooks/hubspot` | MQL trigger. Accepts HubSpot workflow webhooks (`{objectId}`) and developer-app subscriptions (`[{objectId, eventId, ...}]`). Verifies `X-HubSpot-Signature-v3` / `X-HubSpot-Signature`. Returns 202 and processes in the background. |
-| `POST` | `/webhooks/clay` | Clay table callback for push-model enrichment. Merges enrichment and resumes the pipeline. |
-| `POST` | `/webhooks/slack/interactive` | Button clicks. Verifies Slack signature. |
-| `POST` | `/leads/{id}/accept` · `/contacted` · `/reassign` · `/resume` | Same actions from any system (Outreach/Salesloft webhook, Salesforce flow, cron). |
-| `GET` | `/leads/{id}` · `/leads?stage=handed_off` | Inspect. |
-| `GET` | `/stats` | Response-time median/p90/mean, counts by stage, open leads per SDR. |
-| `POST` | `/sla/sweep` | Force one SLA pass (the server also runs it every `RELAY_SLA_CHECK_INTERVAL_S`). |
+## Simulation
 
-## Setting up the integrations
-
-**HubSpot.** Create a private app with `crm.objects.contacts.read/write`. Then either (a) a Workflow: enroll on `Lifecycle stage = MQL` → action "Send a webhook" → `POST https://relay.yourco.com/webhooks/hubspot`, or (b) a developer app subscription on `contact.propertyChange` for `lifecyclestage`. Put the app's client secret in `RELAY_HUBSPOT_WEBHOOK_SECRET`. Optionally create contact properties `relay_score`, `relay_tier`, `relay_owner`, `relay_status` for write-back.
-
-**Clay.** Two modes. *Push* (default): set `RELAY_CLAY_WEBHOOK_URL` to a Clay table's webhook source; add an "HTTP API" column at the end of your waterfall that POSTs the row to `/webhooks/clay` with header `x-clay-webhook-auth: <RELAY_CLAY_API_KEY>`. *Pull*: pass an `enrich_url` to `ClayClient` if you expose a synchronous enrichment endpoint. Relay reads `person.{seniority, department, linkedin_url}` and `company.{employee_count, industry, tech_stack, country}`.
-
-**Harmonic.** `RELAY_HARMONIC_API_KEY`. Relay calls `GET /companies?website_domain=` and reads funding stage/total, last round date, 180-day headcount growth, and `harmonic_score`.
-
-**Salesforce.** Connected app + integration user. Create these Lead fields once: `Relay_Lead_Id__c` (Text, External ID), `HubSpot_Contact_Id__c` (Text, External ID), `Relay_Score__c` (Number), `Relay_Tier__c` (Picklist), `Relay_Routing_Reason__c` (Text 255), `Relay_Handoff_At__c`, `Relay_SLA_Due_At__c`, `Relay_First_Response_At__c` (DateTime), `Relay_SLA_Breached__c` (Checkbox). Add each SDR's User Id to `config/sdrs.yaml`.
-
-**Slack.** Bot token with `chat:write`, `im:write`, `chat:write.public`. Enable Interactivity → request URL `https://relay.yourco.com/webhooks/slack/interactive`. Put the signing secret in `RELAY_SLACK_SIGNING_SECRET`. Invite the bot to both channels.
-
-## Deploy
-
-```bash
-docker build -t relay .
-docker run --env-file .env -p 8080:8080 -v relay-data:/app relay
-```
-
-One instance handles thousands of MQLs/day comfortably; the hot path is two concurrent HTTP calls plus a few ms of scoring. For HA, point `RELAY_DATABASE_URL` at a shared SQLite on a volume or swap `relay/store.py` for Postgres (the interface is ~10 methods).
-
-## Measuring response time
-
-"Response time" is handoff → first `contacted` signal. Feed that signal from wherever outbound actually happens: the Slack button is the floor; wire Outreach/Salesloft "first step executed" webhooks or a Salesforce Flow on `Status → Working` to `POST /leads/{id}/contacted` for the real number. `GET /stats` gives median / p90 / mean; `relay stats` prints the same.
+`autopilot simulate` runs the entire program offline against the two sample funnels. Each shipped experiment gets a hidden "true" effect drawn around the agent's prior (a working idea lands at roughly 60% of the prior; a dud lands near zero or slightly negative), daily traffic is split 50/50, and the agent observes every day until it decides. It's deterministic per seed, so you can study how the sequential boundary behaves: including the occasional false positive at the final look, which is what α = 0.05 means.
 
 ## Layout
 
 ```
-relay/
-  api.py            FastAPI app: webhooks, lead actions, stats
-  cli.py            relay serve | simulate | score | stats | sweep
-  pipeline.py       orchestration, resume, SLA sweep, SDR actions
-  models.py         Lead, Enrichment, Score, SDR, RoutingDecision, SLAState, LeadRecord
-  scoring.py        YAML-driven ICP scorer
-  routing.py        team rules + SDR selection strategies
-  sla.py            SLA clock, breach detection, stats
-  store.py          SQLite persistence, round-robin cursors, idempotency keys
-  settings.py       env config (RELAY_*)
-  enrichment/       clay.py, harmonic.py, enricher.py (parallel merge)
-  crm/              hubspot.py, salesforce.py
-  handoff/          slack.py (Block Kit card, DMs, escalation)
-config/
-  icp.yaml  routing.yaml  sdrs.yaml
-tests/              33 tests: scoring, routing, pipeline, API
+autopilot/
+  agent.py        the loop: propose → generate → ship → observe → readout; simulate(); summary()
+  funnel.py       loading, step-to-step leak analysis, benchmarks
+  proposer.py     Claude or playbook proposals; ranking model
+  generator.py    Variant.tsx, flag-gated index.tsx, flag JSON for 4 providers
+  stats.py        z-test, CI, power, sample size, sequential boundary
+  readout.py      markdown readout (template, optionally rewritten by Claude)
+  llm.py          Claude client with mock fallback
+  store.py        SQLite
+  sources/        mixpanel.py, posthog.py
+  cli.py
+config/playbook.yaml   21 growth patterns with lift priors
+data/funnels.json      two sample funnels
+tests/                 21 tests
 ```
 
 ## License

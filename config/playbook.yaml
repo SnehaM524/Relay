@@ -1,0 +1,217 @@
+# Experiment playbook. Each entry is a well-known growth pattern with the step
+# types it applies to and a prior on expected relative lift (from published
+# CRO benchmarks and our own history). The mock proposer draws from this;
+# Claude gets it as context and goes beyond it.
+#
+# step_types: landing | signup_form | email_verify | onboarding | pricing | checkout | activation | invite
+
+patterns:
+  - key: reduce-form-fields
+    name: Cut signup form to email + password
+    category: friction
+    applies_to: [signup_form]
+    expected_lift: 0.12
+    confidence: 0.75
+    effort: S
+    hypothesis: "Every extra field costs completions; collecting company/role later (in onboarding) will raise form completion."
+    change: "Remove company, role, and phone fields from the signup form; ask for them on the first onboarding screen."
+
+  - key: google-sso
+    name: Add Google / Microsoft one-click signup
+    category: friction
+    applies_to: [signup_form]
+    expected_lift: 0.15
+    confidence: 0.7
+    effort: M
+    hypothesis: "A one-click SSO path removes password creation and typing; a large share of B2B users have a Google Workspace or Microsoft identity."
+    change: "Add 'Continue with Google' and 'Continue with Microsoft' buttons above the email form."
+
+  - key: social-proof-logos
+    name: Customer logos and user count on landing
+    category: social_proof
+    applies_to: [landing, pricing]
+    expected_lift: 0.06
+    confidence: 0.6
+    effort: S
+    hypothesis: "Visitors hesitate without evidence that peers use the product; logos and a user count reduce perceived risk."
+    change: "Add a logo strip of 6 recognizable customers and 'Trusted by 12,000+ teams' under the hero CTA."
+
+  - key: magic-link-verify
+    name: Replace verification code with magic link
+    category: friction
+    applies_to: [email_verify]
+    expected_lift: 0.10
+    confidence: 0.65
+    effort: M
+    hypothesis: "Copying a 6-digit code between tabs loses users; a single click in the email is lower friction."
+    change: "Send a magic link instead of a code; keep the code as a fallback below the fold."
+
+  - key: defer-email-verify
+    name: Let users in before verifying email
+    category: friction
+    applies_to: [email_verify]
+    expected_lift: 0.18
+    confidence: 0.6
+    effort: M
+    hypothesis: "Blocking on verification before showing value kills momentum; verifying later (before invite/export) keeps the flow moving."
+    change: "Allow access to the workspace immediately; gate inviting teammates and exports on verification."
+
+  - key: onboarding-progress-bar
+    name: Progress indicator in onboarding
+    category: onboarding
+    applies_to: [onboarding]
+    expected_lift: 0.05
+    confidence: 0.55
+    effort: S
+    hypothesis: "Users abandon multi-step onboarding when they can't see the end; a visible 3-step indicator sets expectations."
+    change: "Add a 'Step 1 of 3' indicator and shorten onboarding from 5 screens to 3."
+
+  - key: template-first-onboarding
+    name: Start from a template instead of blank state
+    category: onboarding
+    applies_to: [onboarding, activation]
+    expected_lift: 0.14
+    confidence: 0.65
+    effort: M
+    hypothesis: "Blank states are the biggest activation killer; starting from a relevant template gets users to the aha moment faster."
+    change: "Replace the empty workspace with a template picker (3 templates chosen by the role captured in onboarding)."
+
+  - key: pricing-anchor-annual
+    name: Default pricing toggle to annual with savings badge
+    category: pricing
+    applies_to: [pricing]
+    expected_lift: 0.04
+    confidence: 0.5
+    effort: S
+    hypothesis: "Annual-default framing with an explicit '2 months free' badge increases plan selection and perceived value."
+    change: "Set the billing toggle to Annual by default and add a 'Save 17%' badge."
+
+  - key: free-trial-no-card
+    name: Remove credit card from trial start
+    category: friction
+    applies_to: [pricing, checkout]
+    expected_lift: 0.25
+    confidence: 0.6
+    effort: M
+    hypothesis: "Requiring a card before value is shown is the single largest drop in trial funnels; removing it increases trial starts substantially (with a planned hit to trial-to-paid that is usually net positive)."
+    change: "Remove the card step from trial signup; collect the card at the end of trial with a 3-day reminder sequence."
+
+  - key: cta-copy-outcome
+    name: Outcome-oriented CTA copy
+    category: copy
+    applies_to: [landing, pricing]
+    expected_lift: 0.04
+    confidence: 0.5
+    effort: S
+    hypothesis: "Outcome CTAs ('Start closing deals faster') outperform generic ones ('Sign up') because they restate the value at the moment of decision."
+    change: "Change the primary CTA from 'Sign up free' to 'Start your free workspace'."
+
+  - key: exit-intent-signup
+    name: Exit-intent capture on landing
+    category: layout
+    applies_to: [landing]
+    expected_lift: 0.03
+    confidence: 0.45
+    effort: S
+    hypothesis: "A share of abandoning visitors will accept a lower-commitment ask (email for a guide) that we can later convert."
+    change: "Show a one-field exit-intent modal offering the onboarding guide."
+
+  - key: inline-validation
+    name: Inline field validation and password strength
+    category: friction
+    applies_to: [signup_form]
+    expected_lift: 0.05
+    confidence: 0.6
+    effort: S
+    hypothesis: "Users who hit a validation error on submit often abandon; inline feedback prevents the error state."
+    change: "Validate email format and password rules as the user types; show a strength meter."
+
+  - key: trust-badges-checkout
+    name: Security and refund badges at checkout
+    category: trust
+    applies_to: [checkout]
+    expected_lift: 0.04
+    confidence: 0.5
+    effort: S
+    hypothesis: "Payment hesitation drops when SOC 2 / 'cancel anytime' / refund guarantees are visible next to the card field."
+    change: "Add a trust row (SOC 2, cancel anytime, 30-day refund) directly beneath the card input."
+
+  - key: invite-teammates-prompt
+    name: Prompt to invite teammates in onboarding
+    category: onboarding
+    applies_to: [onboarding, invite]
+    expected_lift: 0.08
+    confidence: 0.5
+    effort: S
+    hypothesis: "Users who invite a teammate in week one activate at 2-3x the rate; prompting early increases invites."
+    change: "Add an optional 'Invite your team' screen with email chips as the last onboarding step."
+
+  - key: personalized-landing-by-source
+    name: Personalize hero by ad campaign / referrer
+    category: copy
+    applies_to: [landing]
+    expected_lift: 0.07
+    confidence: 0.5
+    effort: M
+    hypothesis: "Message match between ad and landing page increases conversion; a hero that mirrors the campaign keyword reduces bounce."
+    change: "Swap hero headline and screenshot based on utm_campaign (3 variants: sales, marketing, ops)."
+
+  - key: pricing-comparison-table
+    name: Plan comparison table with recommended plan
+    category: layout
+    applies_to: [pricing]
+    expected_lift: 0.06
+    confidence: 0.55
+    effort: M
+    hypothesis: "Visitors can't tell which plan fits them; a feature-by-plan table with a 'Most popular' highlight reduces decision friction."
+    change: "Replace the three plan cards with a comparison table; badge the mid plan as 'Most popular'."
+
+  - key: pricing-faq-objections
+    name: Objection-handling FAQ on pricing
+    category: trust
+    applies_to: [pricing]
+    expected_lift: 0.04
+    confidence: 0.5
+    effort: S
+    hypothesis: "Unanswered questions (contracts, seats, data) stop trial starts; answering the top five inline reduces hesitation."
+    change: "Add a 5-question FAQ accordion under the plans: cancellation, seat changes, data export, security, support."
+
+  - key: live-chat-pricing
+    name: Live chat on pricing page
+    category: trust
+    applies_to: [pricing]
+    expected_lift: 0.05
+    confidence: 0.45
+    effort: S
+    hypothesis: "High-intent visitors with one blocking question will start a trial if they can get it answered in under a minute."
+    change: "Enable the chat widget on /pricing only, with a proactive 'Questions about plans?' opener after 20 seconds."
+
+  - key: fewer-billing-fields
+    name: Card-only checkout, no billing address
+    category: friction
+    applies_to: [checkout]
+    expected_lift: 0.10
+    confidence: 0.65
+    effort: S
+    hypothesis: "Billing address fields double checkout length; most processors only need postal code for AVS."
+    change: "Remove street/city/state fields; keep card number, expiry, CVC, postal code."
+
+  - key: apple-google-pay
+    name: Apple Pay / Google Pay at checkout
+    category: friction
+    applies_to: [checkout]
+    expected_lift: 0.08
+    confidence: 0.55
+    effort: M
+    hypothesis: "Wallet payments remove card entry entirely for a growing share of users, especially on mobile."
+    change: "Add the Payment Request button above the card form via Stripe Elements."
+
+  - key: plan-recommender-quiz
+    name: Two-question plan recommender
+    category: onboarding
+    applies_to: [pricing]
+    expected_lift: 0.05
+    confidence: 0.45
+    effort: M
+    hypothesis: "Asking team size and use case, then recommending one plan, converts better than presenting three equal choices."
+    change: "Add a 'Which plan is right for me?' micro-quiz that highlights one plan and pre-selects it in checkout."

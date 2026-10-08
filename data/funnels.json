@@ -1,0 +1,30 @@
+[
+  {
+    "id": "selfserve-signup",
+    "name": "Self-serve signup",
+    "product": "Northwind (B2B SaaS, PLG)",
+    "window_days": 28,
+    "daily_entrants": 2400,
+    "context": "Landing page from paid search and organic. Signup form has 6 fields (name, email, password, company, role, phone). Email verification is a 6-digit code. Onboarding is 5 screens. Users land in an empty workspace. Audience: ops and RevOps managers at 50-500 person companies.",
+    "steps": [
+      { "name": "landing", "users": 67200, "description": "Landing page view" },
+      { "name": "signup_form", "users": 18816, "description": "Clicked primary CTA, saw signup form" },
+      { "name": "email_verify", "users": 9220, "description": "Submitted form, reached verification" },
+      { "name": "onboarding", "users": 6362, "description": "Verified email, entered onboarding" },
+      { "name": "activation", "users": 3372, "description": "Completed onboarding, created first project" }
+    ]
+  },
+  {
+    "id": "trial-checkout",
+    "name": "Free trial with checkout",
+    "product": "Northwind Pro (sales-assisted trial)",
+    "window_days": 28,
+    "daily_entrants": 900,
+    "context": "Pricing page to 14-day trial. Trial requires a credit card up front. Checkout form has card + billing address. Audience: sales leaders at mid-market companies; most arrive from G2 and comparison pages.",
+    "steps": [
+      { "name": "pricing", "users": 25200, "description": "Pricing page view" },
+      { "name": "checkout", "users": 5544, "description": "Clicked 'Start trial', reached checkout" },
+      { "name": "activation", "users": 1996, "description": "Submitted card, trial started" }
+    ]
+  }
+]
